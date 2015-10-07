@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,6 +30,7 @@ import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.collect.Iterables;
 import com.seyren.core.domain.Alert;
+import com.seyren.core.domain.AlertType;
 import com.seyren.core.domain.Check;
 import com.seyren.core.domain.Subscription;
 import com.seyren.core.domain.SubscriptionType;
@@ -55,7 +55,9 @@ import static com.google.common.collect.Iterables.transform;
 public class SlackNotificationService implements NotificationService {
     private static final Logger LOGGER = LoggerFactory.getLogger(SlackNotificationService.class);
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
+    private static final String COLOR_ERROR = "#d93240";
+    private static final String COLOR_WARN = "#FFD801";
+    private static final String COLOR_OK = "#5bb12f";
     private final SeyrenConfig seyrenConfig;
     private String baseUrl;
 
@@ -99,9 +101,44 @@ public class SlackNotificationService implements NotificationService {
 
         Map<String, Object> body = new HashMap<String, Object>();
         body.put("channel", "#" + StringUtils.removeEnd(channel == null ? "dev-ops" : "datascience-ops", "!"));
-        body.put("text", formatContent(check, subscription, alerts));
         body.put("username", username == null ? "Seyren" : username);
         body.put("icon_emoji", ":seyren:");
+
+        List<Map<String, Object>> attachments = new ArrayList<Map<String, Object>>();
+        body.put("attachments", attachments);
+
+        AlertType state = check.getState();
+        String color = state == AlertType.ERROR ? COLOR_ERROR : state == AlertType.OK ? COLOR_OK : COLOR_WARN;
+        String check_url = String.format("%s/#/checks/%s", seyrenConfig.getBaseUrl(), check.getId());
+
+        Map<String, Object> attachment = new HashMap<String, Object>();
+        List<Map<String, Object>> fields = new ArrayList<Map<String, Object>>();
+        attachment.put("color", color);
+        attachment.put("title", check.getName());
+        attachment.put("title_link", check_url);
+        attachment.put("fields", fields);
+
+        Alert alert = alerts.get(alerts.size() - 1);
+        AlertType toType = alert.getToType();
+        AlertType fromType = alert.getFromType();
+
+        Map<String, Object> newStateField = new HashMap<String, Object>();
+        newStateField.put("title", "New State Value");
+        newStateField.put("value", toType.toString());
+        newStateField.put("short", true);
+        fields.add(newStateField);
+
+        Map<String, Object> oldStateField = new HashMap<String, Object>();
+        oldStateField.put("title", "Old State Value");
+        oldStateField.put("value", fromType.toString());
+        oldStateField.put("short", true);
+        fields.add(oldStateField);
+
+        Map<String, Object> descriptionField = new HashMap<String, Object>();
+        descriptionField.put("title", "Description");
+        descriptionField.put("value", String.format("%s = %s", alert.getTarget(), alert.getValue().toString()));
+        fields.add(descriptionField);
+        attachments.add(attachment);
 
         try {
             HttpEntity entity = new StringEntity(MAPPER.writeValueAsString(body), ContentType.APPLICATION_JSON);
@@ -129,7 +166,6 @@ public class SlackNotificationService implements NotificationService {
 
     private String formatContent(Check check, Subscription subscription, List<Alert> alerts) {
         List<String> emojis = new ArrayList<String>();
-        String url = String.format("%s/#/checks/%s", seyrenConfig.getBaseUrl(), check.getId());
         String alertsString = Joiner.on("\n").join(transform(alerts, new Function<Alert, String>() {
             @Override
             public String apply(Alert input) {
@@ -146,16 +182,10 @@ public class SlackNotificationService implements NotificationService {
             description = "";
         }
 
-        final String state = check.getState().toString();
-
-        return String.format("%s*%s* %s [%s]%s\n```\n%s\n```\n#%s %s",
+        return String.format("%s %s\n\n%s\n\n %s",
                 Iterables.get(emojis, check.getState().ordinal(), ""),
-                state,
-                check.getName(),
-                url,
                 description,
                 alertsString,
-                state.toLowerCase(Locale.getDefault()),
                 channel
         );
     }
