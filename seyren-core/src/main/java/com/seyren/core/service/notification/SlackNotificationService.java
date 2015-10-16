@@ -100,7 +100,7 @@ public class SlackNotificationService implements NotificationService {
         post.addHeader("accept", "application/json");
 
         Map<String, Object> body = new HashMap<String, Object>();
-        body.put("channel", "#" + StringUtils.removeEnd(channel == null ? "dev-ops" : "datascience-ops", "!"));
+        body.put("channel", "#" + StringUtils.removeEnd(channel == null ? "dev-ops" : channel, "!"));
         body.put("username", username == null ? "Seyren" : username);
         body.put("icon_emoji", ":seyren:");
 
