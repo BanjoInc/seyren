@@ -114,6 +114,7 @@ public class SlackNotificationService implements NotificationService {
         Map<String, Object> attachment = new HashMap<String, Object>();
         List<Map<String, Object>> fields = new ArrayList<Map<String, Object>>();
         attachment.put("color", color);
+        attachment.put("fallback", check.getName());
         attachment.put("title", check.getName());
         attachment.put("title_link", check_url);
         attachment.put("fields", fields);
